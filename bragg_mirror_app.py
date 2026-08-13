@@ -255,51 +255,48 @@ with tab2:
     with col_s2:
         wl0_2 = st.number_input(T["wl_center"], value=1550.0, step=1.0, key="wl2")
         
-        st.markdown(f"#### {T['top_mirror']}")
-        n3_2 = st.number_input("n₃ (Top High):", value=2.0, step=0.01)
-        n4_2 = st.number_input("n₄ (Top Low):", value=1.45, step=0.01)
-        N_top = st.number_input("N_top (Pairs):", value=8, step=1)
-        dev_top = st.slider(T["dev_label"], -50.0, 50.0, 0.0, step=1.0, key="dev_top")
+        st.markdown(f"#### {T['bot_mirror']} & {T['top_mirror']}")
+        n_high = st.number_input("n_High (e.g., SiN):", value=2.0, step=0.01)
+        n_low = st.number_input("n_Low (e.g., SiO2):", value=1.45, step=0.01)
+        N_pairs = st.number_input("Number of Pairs (Top & Bot):", value=10, step=1)
         
         st.markdown(f"#### {T['defect_layer']}")
         n_def = st.number_input(T["n_def"], value=2.0, step=0.01)
-        use_half = st.checkbox(T["use_quarter_wave"], value=True)
+        use_half = st.checkbox(T["use_quarter_wave"], value=True, help="Use strictly λ₀/(2n) for center resonance")
+        
         if use_half:
             d_def = wl0_2 / (2 * n_def)
             st.info(f"Defect Thickness: {d_def:.2f} nm (λ₀/2)")
         else:
             d_def = st.number_input(T["d_def"], value=387.5, step=1.0)
             
-        st.markdown(f"#### {T['bot_mirror']}")
-        n1_2 = st.number_input("n₁ (Bot High):", value=2.0, step=0.01)
-        n2_2 = st.number_input("n₂ (Bot Low):", value=1.45, step=0.01)
-        N_bot = st.number_input("N_bottom (Pairs):", value=8, step=1)
-        dev_bot = st.slider(T["dev_label"], -50.0, 50.0, 0.0, step=1.0, key="dev_bot")
-
     with col_m2:
         layers_cavity = []
         
-        # Top Mirror
-        d3 = (wl0_2 / (4 * n3_2)) * (1.0 + dev_top / 100.0)
-        d4 = (wl0_2 / (4 * n4_2)) * (1.0 + dev_top / 100.0)
-        for _ in range(int(N_top)):
-            layers_cavity.append((n3_2, d3))
-            layers_cavity.append((n4_2, d4))
-            
-        # Defect Layer
+        # בניית המראה העליונה (סימטרית: תמיד מתחילה ומסתיימת ב-High)
+        d_high = wl0_2 / (4 * n_high)
+        d_low = wl0_2 / (4 * n_low)
+        
+        # מראה עליונה (מתחיל ב-High, מסיים ב-High לפני החלל)
+        for _ in range(int(N_pairs)):
+            layers_cavity.append((n_high, d_high))
+            layers_cavity.append((n_low, d_low))
+        layers_cavity.append((n_high, d_high)) # שכבת High מסימת כדי לקבע פאזת החזרה 0 או pi
+
+        # שכבת ההפרעה (Cavity) - עובי חצי-גל ימרכז אותה בדיוק
         layers_cavity.append((n_def, d_def))
         
-        # Bottom Mirror
-        d1 = (wl0_2 / (4 * n1_2)) * (1.0 + dev_bot / 100.0)
-        d2 = (wl0_2 / (4 * n2_2)) * (1.0 + dev_bot / 100.0)
-        for _ in range(int(N_bot)):
-            layers_cavity.append((n1_2, d1))
-            layers_cavity.append((n2_2, d2))
+        # מראה תחתונה (סימטרית: מתחילה ב-High, מסיימת ב-High)
+        layers_cavity.append((n_high, d_high))
+        for _ in range(int(N_pairs)):
+            layers_cavity.append((n_low, d_low))
+            layers_cavity.append((n_high, d_high))
             
-        wls_2 = np.linspace(wl0_2 - 150, wl0_2 + 150, 8000) # דגימה צפופה לזיהוי Notch חד
+        # סריקה ברזולוציה גבוהה כדי לא לפספס את הפיק
+        wls_2 = np.linspace(wl0_2 - 100, wl0_2 + 100, 10000) 
         R2, T2 = tmm_1d(wls_2, layers_cavity, 1.0, 1.45)
         
-        # חישוב Q-Factor מוגן משגיאות
+        # חילוץ Q-Factor
         peaks, props = find_peaks(T2, prominence=0.05)
         Q_val, fwhm_nm = 0, 0
         if len(peaks) > 0:
@@ -321,28 +318,9 @@ with tab2:
         mc4.markdown(f'<div class="metric-card"><div class="metric-label">{T["calc_q"]}</div><div class="metric-val">{Q_val:,.0f}</div></div>', unsafe_allow_html=True)
         mc5.markdown(f'<div class="metric-card"><div class="metric-label">{T["calc_fwhm"]}</div><div class="metric-val">{fwhm_nm:.3f} nm</div></div>', unsafe_allow_html=True)
 
-        # --- 1. גרף בסקאלה ליניארית (הבלטת פיק התמסורת והשקע בהחזרה) ---
-        st.markdown(f"#### {T['graph_linear_title']}")
-        fig2_lin, ax2_lin = plt.subplots(figsize=(9, 3.8), dpi=150)
-        fig2_lin.patch.set_facecolor('#0F172A')
-        ax2_lin.set_facecolor('#0F172A')
-        
-        ax2_lin.plot(wls_2, T2, color='#10B981', linewidth=2, label='Transmission (T)')
-        ax2_lin.plot(wls_2, R2, color='#38BDF8', linewidth=1.5, linestyle='--', alpha=0.7, label='Reflectivity (R)')
-        ax2_lin.set_ylim(-0.02, 1.05)
-        ax2_lin.set_xlabel("Wavelength λ (nm)", color='#94A3B8', fontweight='bold')
-        ax2_lin.set_ylabel("Linear Value (0-1)", color='#94A3B8', fontweight='bold')
-        ax2_lin.grid(True, color='#334155', linestyle=':', alpha=0.6)
-        ax2_lin.legend(facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC')
-        
-        st.pyplot(fig2_lin)
-        st.download_button(T["download_lin"], data=figure_to_bytes(fig2_lin), file_name="defect_linear.png", mime="image/png", key="dl_lin_2")
-
-        st.write("")
-
-        # --- 2. גרף בסקאלה לוגריתמית / dB (הבלטת עומק ה-Notch בצורה דרמטית) ---
+        # גרף לוגריתמי / dB 
         st.markdown(f"#### {T['graph_log_title']}")
-        fig2_log, ax2_log = plt.subplots(figsize=(9, 3.8), dpi=150)
+        fig2_log, ax2_log = plt.subplots(figsize=(9, 4.5), dpi=150)
         fig2_log.patch.set_facecolor('#0F172A')
         ax2_log.set_facecolor('#0F172A')
         
@@ -351,6 +329,10 @@ with tab2:
         
         ax2_log.plot(wls_2, T2_db, color='#10B981', linewidth=2, label='Transmission (dB)')
         ax2_log.plot(wls_2, R2_db, color='#38BDF8', linewidth=1.5, linestyle='--', alpha=0.7, label='Reflectivity Notch (dB)')
+        
+        # קו סימון אמצע - נוכיח שה-Notch יושב בדיוק באמצע!
+        ax2_log.axvline(wl0_2, color='#F43F5E', linestyle=':', label='Center $\lambda_0$')
+        
         ax2_log.set_ylim(-60, 2)
         ax2_log.set_xlabel("Wavelength λ (nm)", color='#94A3B8', fontweight='bold')
         ax2_log.set_ylabel("Power (dB)", color='#94A3B8', fontweight='bold')
@@ -358,8 +340,6 @@ with tab2:
         ax2_log.legend(facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC')
         
         st.pyplot(fig2_log)
-        st.download_button(T["download_log"], data=figure_to_bytes(fig2_log), file_name="defect_log_db.png", mime="image/png", key="dl_log_2")
-
 # ==========================================
 # TAB 3: Physics & Equations
 # ==========================================
