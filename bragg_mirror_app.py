@@ -9,7 +9,7 @@ import streamlit as st
 # ==========================================
 # הגדרות עמוד ראשיות
 # ==========================================
-MODULE_VERSION = "v1.0.0"
+MODULE_VERSION = "v1.1.0"
 
 st.set_page_config(
     page_title="Bragg Grating Simulator",
@@ -35,20 +35,22 @@ T = {
         "dir": "rtl",
         "align": "right",
         "title": "Bragg Grating & DBR Simulation Engine",
-        "subtitle": "סימולטור 1D Transfer Matrix Method (TMM) למראות פוטוניות וחללי תהודה (Cavities)",
+        "subtitle": "סימולטור 1D Transfer Matrix Method למראות פוטוניות וחללי תהודה (Cavities)",
         "tab1": "1. מראת בראג בודדת (DBR)",
         "tab2": "2. מבנה הפרעה / מהוד (Defect Cavity)",
-        "tab3": "3. משוואות ופיזיקה (Physics)",
+        "tab3": "3. משוואות ופיזיקה",
         "params": "⚙️ פרמטרי קלט",
-        "wl_center": "אורך גל מרכזי λ₀ (nm):",
+        "wl_center": "אורך גל לתכנון λ₀ (nm):",
         "n_inc": "מקדם שבירה כניסה (Incident):",
         "n_sub": "מקדם שבירה מצע (Substrate):",
         "layer_config": "🔲 הגדרת השכבות",
-        "n1_label": "מקדם שבירה n₁ (למשל SiN):",
-        "n2_label": "מקדם שבירה n₂ (למשל SiO₂):",
+        "n1_label": "מקדם שבירה n₁ (גבוה):",
+        "n2_label": "מקדם שבירה n₂ (נמוך):",
         "n_pairs": "מספר מחזורים N (זוגות):",
+        "dev_label": "סטייה מעובי רבע-גל (%):",
+        "dev_help": "מאפשר לשנות את העובי בסטייה של X אחוזים מעובי הרבע-גל האידיאלי (λ/4n)",
         "btn_calc": "🚀 הרץ סימולציה",
-        "metrics_title": "💡 תוצאות אנליטיות",
+        "metrics_title": "💡 תוצאות",
         "peak_r": "החזרה מקסימלית (R_peak)",
         "stopband": "רוחב הפס החוסם (Stopband Δλ)",
         "download": "📥 הורד איור ספקטרום (PNG)",
@@ -57,7 +59,7 @@ T = {
         "bot_mirror": "🔸 מראה תחתונה (Bottom Mirror)",
         "defect_layer": "❌ שכבת הפרעה (Defect / Cavity)",
         "n_def": "מקדם שבירה של ההפרעה (n_def):",
-        "d_def": "עובי ההפרעה (nm):",
+        "d_def": "עובי ההפרעה בננומטר (d_def):",
         "use_quarter_wave": "השתמש בחצי-גל λ₀/(2n_def)",
         "calc_q": "Q-Factor מחושב:",
         "calc_fwhm": "רוחב חצי-מקסימום (FWHM):",
@@ -72,15 +74,17 @@ T = {
         "tab2": "2. Defect Cavity (FP Filter)",
         "tab3": "3. Equations & Physics",
         "params": "⚙️ Input Parameters",
-        "wl_center": "Center Wavelength λ₀ (nm):",
+        "wl_center": "Design Wavelength λ₀ (nm):",
         "n_inc": "Incident Index (n_inc):",
         "n_sub": "Substrate Index (n_sub):",
         "layer_config": "🔲 Layer Configuration",
-        "n1_label": "Refractive Index n₁ (e.g. High):",
-        "n2_label": "Refractive Index n₂ (e.g. Low):",
+        "n1_label": "Refractive Index n₁ (High):",
+        "n2_label": "Refractive Index n₂ (Low):",
         "n_pairs": "Number of Periods N (Pairs):",
+        "dev_label": "Deviation from λ/4 (%):",
+        "dev_help": "Deviate the layer thickness by X percent from the ideal quarter-wave condition (λ/4n)",
         "btn_calc": "🚀 Run Simulation",
-        "metrics_title": "💡 Analytical Results",
+        "metrics_title": "💡 Results",
         "peak_r": "Peak Reflectivity (R_peak)",
         "stopband": "Stopband Width (Δλ)",
         "download": "📥 Download Spectrum Plot (PNG)",
@@ -107,7 +111,7 @@ st.markdown(f"""
     
     .main-title {{ font-size: 2.8rem; font-weight: 900; background: linear-gradient(90deg, #F59E0B 0%, #EC4899 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-bottom: 0px; padding-top: 0.2rem; }}
     .sub-title {{ text-align: center; color: #475569; font-size: 1.15rem; margin-bottom: 30px; font-weight: 700; }}
-    .metric-card {{ background-color: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 15px; text-align: center; margin-bottom: 10px; }}
+    .metric-card {{ background-color: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 15px; text-align: center; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }}
     .metric-val {{ font-size: 1.8rem; font-weight: 900; color: #38BDF8; }}
     .metric-label {{ font-size: 0.9rem; color: #94A3B8; font-weight: 600; }}
     .stDownloadButton > button {{ background-color: #1E293B !important; color: #38BDF8 !important; border: 1px solid #38BDF8 !important; font-weight: 700 !important; border-radius: 8px !important; width: 100%; }}
@@ -170,11 +174,18 @@ with tab1:
         st.divider()
         st.markdown(f"#### {T['layer_config']}")
         n1_1 = st.number_input(T["n1_label"], value=2.0, step=0.01, key="n1_1")
+        dev1_1 = st.slider(T["dev_label"], -50.0, 50.0, 0.0, step=1.0, key="dev1_1", help=T["dev_help"])
+        
         n2_1 = st.number_input(T["n2_label"], value=1.45, step=0.01, key="n2_1")
+        dev2_1 = st.slider(T["dev_label"], -50.0, 50.0, 0.0, step=1.0, key="dev2_1", help=T["dev_help"])
+        
         N_pairs_1 = st.number_input(T["n_pairs"], value=15, min_value=1, step=1, key="np1")
         
-        d1_1, d2_1 = wl0_1 / (4 * n1_1), wl0_1 / (4 * n2_1)
-        st.info(f"**Calculated Quarter-Wave Thicknesses:**\n* $d_1 = {d1_1:.1f}$ nm\n* $d_2 = {d2_1:.1f}$ nm")
+        # חישוב עובי השכבות עם הסטייה הנדרשת
+        d1_1 = (wl0_1 / (4 * n1_1)) * (1.0 + dev1_1 / 100.0)
+        d2_1 = (wl0_1 / (4 * n2_1)) * (1.0 + dev2_1 / 100.0)
+        
+        st.info(f"**Applied Thicknesses:**\n* $d_1 = {d1_1:.2f}$ nm\n* $d_2 = {d2_1:.2f}$ nm")
 
     with col_m1:
         # Build layers sequence
@@ -183,24 +194,27 @@ with tab1:
             layers_dbr.append((n1_1, d1_1))
             layers_dbr.append((n2_1, d2_1))
             
-        wls_1 = np.linspace(wl0_1 - 250, wl0_1 + 250, 2000)
+        wls_1 = np.linspace(wl0_1 - 400, wl0_1 + 400, 2000)
         R1, T1 = tmm_1d(wls_1, layers_dbr, n_inc_1, n_sub_1)
         
-        # Analytical calculations
+        # חישובים תיאורטיים למראת רבע-גל אידיאלית
         r_peak_analy = ((n_inc_1 - n_sub_1 * (n1_1/n2_1)**(2*N_pairs_1)) / (n_inc_1 + n_sub_1 * (n1_1/n2_1)**(2*N_pairs_1)))**2
         stopband_analy = (4 * wl0_1 / np.pi) * np.arcsin(np.abs(n1_1 - n2_1) / (n1_1 + n2_1))
         
         mc1, mc2, mc3 = st.columns(3)
         mc1.markdown(f'<div class="metric-card"><div class="metric-label">{T["peak_r"]}</div><div class="metric-val">{np.max(R1)*100:.2f}%</div></div>', unsafe_allow_html=True)
-        mc2.markdown(f'<div class="metric-card"><div class="metric-label">{T["stopband"]}</div><div class="metric-val">~{stopband_analy:.1f} nm</div></div>', unsafe_allow_html=True)
-        mc3.markdown(f'<div class="metric-card"><div class="metric-label">Max Transmission</div><div class="metric-val">{np.min(T1)*100:.3f}%</div></div>', unsafe_allow_html=True)
+        
+        # בסטייה גדולה התיאוריה אינה מדויקת, אז נציג אזהרה עדינה
+        sb_display = f"~{stopband_analy:.1f} nm" if (dev1_1==0 and dev2_1==0) else "Deviated"
+        mc2.markdown(f'<div class="metric-card"><div class="metric-label">{T["stopband"]}</div><div class="metric-val">{sb_display}</div></div>', unsafe_allow_html=True)
+        mc3.markdown(f'<div class="metric-card"><div class="metric-label">Max Transmission</div><div class="metric-val">{np.max(T1)*100:.2f}%</div></div>', unsafe_allow_html=True)
         
         fig1, ax1 = plt.subplots(figsize=(9, 4.5), dpi=150)
         fig1.patch.set_facecolor('#0F172A')
         ax1.set_facecolor('#0F172A')
         ax1.plot(wls_1, R1, color='#38BDF8', linewidth=2, label='Reflectivity (R)')
         ax1.plot(wls_1, T1, color='#F43F5E', linewidth=2, linestyle='--', alpha=0.8, label='Transmission (T)')
-        ax1.axvline(wl0_1, color='#94A3B8', linestyle=':', label='Center λ₀')
+        ax1.axvline(wl0_1, color='#94A3B8', linestyle=':', label='Design λ₀')
         
         ax1.set_xlabel("Wavelength λ (nm)", color='#94A3B8', fontweight='bold')
         ax1.set_ylabel("Power / Amplitude", color='#94A3B8', fontweight='bold')
@@ -223,6 +237,7 @@ with tab2:
         n3_2 = st.number_input("n₃ (Top High):", value=2.0, step=0.01)
         n4_2 = st.number_input("n₄ (Top Low):", value=1.45, step=0.01)
         N_top = st.number_input("N_top (Pairs):", value=8, step=1)
+        dev_top = st.slider(T["dev_label"], -50.0, 50.0, 0.0, step=1.0, key="dev_top")
         
         st.markdown(f"#### {T['defect_layer']}")
         n_def = st.number_input(T["n_def"], value=2.0, step=0.01)
@@ -237,36 +252,49 @@ with tab2:
         n1_2 = st.number_input("n₁ (Bot High):", value=2.0, step=0.01)
         n2_2 = st.number_input("n₂ (Bot Low):", value=1.45, step=0.01)
         N_bot = st.number_input("N_bottom (Pairs):", value=8, step=1)
+        dev_bot = st.slider(T["dev_label"], -50.0, 50.0, 0.0, step=1.0, key="dev_bot")
 
     with col_m2:
         layers_cavity = []
-        # Top Mirror
+        
+        # עוביי המראה העליונה עם סטייה
+        d3 = (wl0_2 / (4 * n3_2)) * (1.0 + dev_top / 100.0)
+        d4 = (wl0_2 / (4 * n4_2)) * (1.0 + dev_top / 100.0)
         for _ in range(int(N_top)):
-            layers_cavity.append((n3_2, wl0_2/(4*n3_2)))
-            layers_cavity.append((n4_2, wl0_2/(4*n4_2)))
-        # Defect
-        layers_cavity.append((n_def, d_def))
-        # Bottom Mirror
-        for _ in range(int(N_bot)):
-            layers_cavity.append((n1_2, wl0_2/(4*n1_2)))
-            layers_cavity.append((n2_2, wl0_2/(4*n2_2)))
+            layers_cavity.append((n3_2, d3))
+            layers_cavity.append((n4_2, d4))
             
-        wls_2 = np.linspace(wl0_2 - 150, wl0_2 + 150, 3000)
+        # שכבת ההפרעה במרכז
+        layers_cavity.append((n_def, d_def))
+        
+        # עוביי המראה התחתונה עם סטייה
+        d1 = (wl0_2 / (4 * n1_2)) * (1.0 + dev_bot / 100.0)
+        d2 = (wl0_2 / (4 * n2_2)) * (1.0 + dev_bot / 100.0)
+        for _ in range(int(N_bot)):
+            layers_cavity.append((n1_2, d1))
+            layers_cavity.append((n2_2, d2))
+            
+        wls_2 = np.linspace(wl0_2 - 150, wl0_2 + 150, 4000)
         R2, T2 = tmm_1d(wls_2, layers_cavity, 1.0, 1.45)
         
-        # Extrac Q-Factor based on transmission peak
-        peaks, props = find_peaks(T2, prominence=0.1)
+        # מציאת ה-Q-Factor עם חסינות לשגיאות חיתוך גבולות (IndexError Fix)
+        peaks, props = find_peaks(T2, prominence=0.05)
         Q_val, fwhm_nm = 0, 0
         if len(peaks) > 0:
             center_peak_idx = peaks[np.argmin(np.abs(wls_2[peaks] - wl0_2))]
             pk_wl = wls_2[center_peak_idx]
             
-            # Simple FWHM calculation
             half_max = T2[center_peak_idx] / 2.0
-            idx_left = np.where(T2[:center_peak_idx] <= half_max)[0][-1]
-            idx_right = center_peak_idx + np.where(T2[center_peak_idx:] <= half_max)[0][0]
-            fwhm_nm = wls_2[idx_right] - wls_2[idx_left]
-            Q_val = pk_wl / fwhm_nm if fwhm_nm > 0 else 0
+            
+            left_points = np.where(T2[:center_peak_idx] <= half_max)[0]
+            right_points = np.where(T2[center_peak_idx:] <= half_max)[0]
+            
+            # בדיקת בטיחות מפני אינדקסים ריקים (כשהפיק נחתך בקצה הסריקה)
+            if len(left_points) > 0 and len(right_points) > 0:
+                idx_left = left_points[-1]
+                idx_right = center_peak_idx + right_points[0]
+                fwhm_nm = wls_2[idx_right] - wls_2[idx_left]
+                Q_val = pk_wl / fwhm_nm if fwhm_nm > 0 else 0
             
         mc4, mc5 = st.columns(2)
         mc4.markdown(f'<div class="metric-card"><div class="metric-label">{T["calc_q"]}</div><div class="metric-val">{Q_val:,.0f}</div></div>', unsafe_allow_html=True)
@@ -276,8 +304,8 @@ with tab2:
         fig2.patch.set_facecolor('#0F172A')
         ax2.set_facecolor('#0F172A')
         
-        ax2.plot(wls_2, T2, color='#10B981', linewidth=2, label='Transmission (T)')
-        ax2.plot(wls_2, R2, color='#64748B', linewidth=1, alpha=0.5, label='Reflectivity (R)')
+        ax2.plot(wls_2, T2, color='#10B981', linewidth=2.5, label='Transmission (T)')
+        ax2.plot(wls_2, R2, color='#64748B', linewidth=1.5, alpha=0.6, label='Reflectivity (R)')
         
         ax2.set_yscale('log')
         ax2.set_ylim(1e-4, 1.5)
@@ -310,7 +338,7 @@ with tab3:
     
     ### ⚡ Distributed Bragg Reflector (DBR) Properties
     
-    For a Bragg mirror consisting of alternating high ($n_1$) and low ($n_2$) index quarter-wave layers ($d_i = \\lambda_0 / 4n_i$), the maximum theoretical reflectivity for $N$ pairs on a substrate $n_s$ is:
+    For an ideal Bragg mirror consisting of alternating high ($n_1$) and low ($n_2$) index quarter-wave layers ($d_i = \\lambda_0 / 4n_i$), the maximum theoretical reflectivity for $N$ pairs on a substrate $n_s$ is:
     
     $$ R_{\\text{peak}} = \\left( \\frac{n_{\\text{inc}} - n_s (n_1/n_2)^{2N}}{n_{\\text{inc}} + n_s (n_1/n_2)^{2N}} \\right)^2 $$
     
