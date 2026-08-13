@@ -9,7 +9,7 @@ import streamlit as st
 # ==========================================
 # הגדרות עמוד ראשיות
 # ==========================================
-MODULE_VERSION = "v1.1.0"
+MODULE_VERSION = "v1.2.0"
 
 st.set_page_config(
     page_title="Bragg Grating Simulator",
@@ -49,11 +49,10 @@ T = {
         "n_pairs": "מספר מחזורים N (זוגות):",
         "dev_label": "סטייה מעובי רבע-גל (%):",
         "dev_help": "מאפשר לשנות את העובי בסטייה של X אחוזים מעובי הרבע-גל האידיאלי (λ/4n)",
-        "btn_calc": "🚀 הרץ סימולציה",
-        "metrics_title": "💡 תוצאות",
         "peak_r": "החזרה מקסימלית (R_peak)",
         "stopband": "רוחב הפס החוסם (Stopband Δλ)",
-        "download": "📥 הורד איור ספקטרום (PNG)",
+        "download_lin": "📥 הורד גרף ליניארי (PNG)",
+        "download_log": "📥 הורד גרף לוגריתמי / dB (PNG)",
         # Defect Cavity Texts
         "top_mirror": "🔹 מראה עליונה (Top Mirror)",
         "bot_mirror": "🔸 מראה תחתונה (Bottom Mirror)",
@@ -63,6 +62,8 @@ T = {
         "use_quarter_wave": "השתמש בחצי-גל λ₀/(2n_def)",
         "calc_q": "Q-Factor מחושב:",
         "calc_fwhm": "רוחב חצי-מקסימום (FWHM):",
+        "graph_linear_title": "📊 ספקטרום בסקאלה ליניארית (Linear Scale)",
+        "graph_log_title": "📈 ספקטרום בסקאלה לוגריתמית (dB Scale)",
         "footer": "Powered by Transfer Matrix Method (TMM) | Engineered for Silicon Photonics"
     },
     "En": {
@@ -83,11 +84,10 @@ T = {
         "n_pairs": "Number of Periods N (Pairs):",
         "dev_label": "Deviation from λ/4 (%):",
         "dev_help": "Deviate the layer thickness by X percent from the ideal quarter-wave condition (λ/4n)",
-        "btn_calc": "🚀 Run Simulation",
-        "metrics_title": "💡 Results",
         "peak_r": "Peak Reflectivity (R_peak)",
         "stopband": "Stopband Width (Δλ)",
-        "download": "📥 Download Spectrum Plot (PNG)",
+        "download_lin": "📥 Download Linear Plot (PNG)",
+        "download_log": "📥 Download Logarithmic/dB Plot (PNG)",
         # Defect Cavity Texts
         "top_mirror": "🔹 Top Mirror",
         "bot_mirror": "🔸 Bottom Mirror",
@@ -97,6 +97,8 @@ T = {
         "use_quarter_wave": "Use half-wave λ₀/(2n_def)",
         "calc_q": "Calculated Q-Factor:",
         "calc_fwhm": "FWHM:",
+        "graph_linear_title": "📊 Linear Scale Spectrum",
+        "graph_log_title": "📈 Logarithmic / dB Scale Spectrum",
         "footer": "Powered by Transfer Matrix Method (TMM) | Engineered for Silicon Photonics"
     }
 }[lang]
@@ -181,14 +183,12 @@ with tab1:
         
         N_pairs_1 = st.number_input(T["n_pairs"], value=15, min_value=1, step=1, key="np1")
         
-        # חישוב עובי השכבות עם הסטייה הנדרשת
         d1_1 = (wl0_1 / (4 * n1_1)) * (1.0 + dev1_1 / 100.0)
         d2_1 = (wl0_1 / (4 * n2_1)) * (1.0 + dev2_1 / 100.0)
         
         st.info(f"**Applied Thicknesses:**\n* $d_1 = {d1_1:.2f}$ nm\n* $d_2 = {d2_1:.2f}$ nm")
 
     with col_m1:
-        # Build layers sequence
         layers_dbr = []
         for _ in range(int(N_pairs_1)):
             layers_dbr.append((n1_1, d1_1))
@@ -197,32 +197,54 @@ with tab1:
         wls_1 = np.linspace(wl0_1 - 400, wl0_1 + 400, 2000)
         R1, T1 = tmm_1d(wls_1, layers_dbr, n_inc_1, n_sub_1)
         
-        # חישובים תיאורטיים למראת רבע-גל אידיאלית
-        r_peak_analy = ((n_inc_1 - n_sub_1 * (n1_1/n2_1)**(2*N_pairs_1)) / (n_inc_1 + n_sub_1 * (n1_1/n2_1)**(2*N_pairs_1)))**2
         stopband_analy = (4 * wl0_1 / np.pi) * np.arcsin(np.abs(n1_1 - n2_1) / (n1_1 + n2_1))
         
         mc1, mc2, mc3 = st.columns(3)
         mc1.markdown(f'<div class="metric-card"><div class="metric-label">{T["peak_r"]}</div><div class="metric-val">{np.max(R1)*100:.2f}%</div></div>', unsafe_allow_html=True)
-        
-        # בסטייה גדולה התיאוריה אינה מדויקת, אז נציג אזהרה עדינה
         sb_display = f"~{stopband_analy:.1f} nm" if (dev1_1==0 and dev2_1==0) else "Deviated"
         mc2.markdown(f'<div class="metric-card"><div class="metric-label">{T["stopband"]}</div><div class="metric-val">{sb_display}</div></div>', unsafe_allow_html=True)
         mc3.markdown(f'<div class="metric-card"><div class="metric-label">Max Transmission</div><div class="metric-val">{np.max(T1)*100:.2f}%</div></div>', unsafe_allow_html=True)
         
-        fig1, ax1 = plt.subplots(figsize=(9, 4.5), dpi=150)
-        fig1.patch.set_facecolor('#0F172A')
-        ax1.set_facecolor('#0F172A')
-        ax1.plot(wls_1, R1, color='#38BDF8', linewidth=2, label='Reflectivity (R)')
-        ax1.plot(wls_1, T1, color='#F43F5E', linewidth=2, linestyle='--', alpha=0.8, label='Transmission (T)')
-        ax1.axvline(wl0_1, color='#94A3B8', linestyle=':', label='Design λ₀')
+        # --- 1. גרף בסקאלה ליניארית ---
+        st.markdown(f"#### {T['graph_linear_title']}")
+        fig1_lin, ax1_lin = plt.subplots(figsize=(9, 3.8), dpi=150)
+        fig1_lin.patch.set_facecolor('#0F172A')
+        ax1_lin.set_facecolor('#0F172A')
         
-        ax1.set_xlabel("Wavelength λ (nm)", color='#94A3B8', fontweight='bold')
-        ax1.set_ylabel("Power / Amplitude", color='#94A3B8', fontweight='bold')
-        ax1.grid(True, color='#334155', linestyle=':', alpha=0.6)
-        ax1.legend(facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC')
+        ax1_lin.plot(wls_1, R1, color='#38BDF8', linewidth=2, label='Reflectivity (R)')
+        ax1_lin.plot(wls_1, T1, color='#F43F5E', linewidth=2, linestyle='--', alpha=0.8, label='Transmission (T)')
+        ax1_lin.axvline(wl0_1, color='#94A3B8', linestyle=':', label='Design λ₀')
+        ax1_lin.set_ylim(-0.02, 1.05)
+        ax1_lin.set_xlabel("Wavelength λ (nm)", color='#94A3B8', fontweight='bold')
+        ax1_lin.set_ylabel("Linear Value (0-1)", color='#94A3B8', fontweight='bold')
+        ax1_lin.grid(True, color='#334155', linestyle=':', alpha=0.6)
+        ax1_lin.legend(facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC')
         
-        st.pyplot(fig1)
-        st.download_button(T["download"], data=figure_to_bytes(fig1), file_name="dbr_spectrum.png", mime="image/png")
+        st.pyplot(fig1_lin)
+        st.download_button(T["download_lin"], data=figure_to_bytes(fig1_lin), file_name="dbr_linear.png", mime="image/png", key="dl_lin_1")
+
+        st.write("")
+        
+        # --- 2. גרף בסקאלה לוגריתמית / dB ---
+        st.markdown(f"#### {T['graph_log_title']}")
+        fig1_log, ax1_log = plt.subplots(figsize=(9, 3.8), dpi=150)
+        fig1_log.patch.set_facecolor('#0F172A')
+        ax1_log.set_facecolor('#0F172A')
+        
+        R1_db = 10 * np.log10(np.maximum(1e-6, R1))
+        T1_db = 10 * np.log10(np.maximum(1e-6, T1))
+        
+        ax1_log.plot(wls_1, T1_db, color='#F43F5E', linewidth=2, label='Transmission (dB)')
+        ax1_log.plot(wls_1, R1_db, color='#38BDF8', linewidth=1.5, linestyle='--', alpha=0.7, label='Reflectivity (dB)')
+        ax1_log.axvline(wl0_1, color='#94A3B8', linestyle=':', label='Design λ₀')
+        ax1_log.set_ylim(-60, 2)
+        ax1_log.set_xlabel("Wavelength λ (nm)", color='#94A3B8', fontweight='bold')
+        ax1_log.set_ylabel("Power (dB)", color='#94A3B8', fontweight='bold')
+        ax1_log.grid(True, color='#334155', linestyle=':', alpha=0.6)
+        ax1_log.legend(facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC')
+        
+        st.pyplot(fig1_log)
+        st.download_button(T["download_log"], data=figure_to_bytes(fig1_log), file_name="dbr_log_db.png", mime="image/png", key="dl_log_1")
 
 # ==========================================
 # TAB 2: Defect Cavity (Fabry-Perot)
@@ -257,27 +279,27 @@ with tab2:
     with col_m2:
         layers_cavity = []
         
-        # עוביי המראה העליונה עם סטייה
+        # Top Mirror
         d3 = (wl0_2 / (4 * n3_2)) * (1.0 + dev_top / 100.0)
         d4 = (wl0_2 / (4 * n4_2)) * (1.0 + dev_top / 100.0)
         for _ in range(int(N_top)):
             layers_cavity.append((n3_2, d3))
             layers_cavity.append((n4_2, d4))
             
-        # שכבת ההפרעה במרכז
+        # Defect Layer
         layers_cavity.append((n_def, d_def))
         
-        # עוביי המראה התחתונה עם סטייה
+        # Bottom Mirror
         d1 = (wl0_2 / (4 * n1_2)) * (1.0 + dev_bot / 100.0)
         d2 = (wl0_2 / (4 * n2_2)) * (1.0 + dev_bot / 100.0)
         for _ in range(int(N_bot)):
             layers_cavity.append((n1_2, d1))
             layers_cavity.append((n2_2, d2))
             
-        wls_2 = np.linspace(wl0_2 - 150, wl0_2 + 150, 4000)
+        wls_2 = np.linspace(wl0_2 - 150, wl0_2 + 150, 8000) # דגימה צפופה לזיהוי Notch חד
         R2, T2 = tmm_1d(wls_2, layers_cavity, 1.0, 1.45)
         
-        # מציאת ה-Q-Factor עם חסינות לשגיאות חיתוך גבולות (IndexError Fix)
+        # חישוב Q-Factor מוגן משגיאות
         peaks, props = find_peaks(T2, prominence=0.05)
         Q_val, fwhm_nm = 0, 0
         if len(peaks) > 0:
@@ -289,7 +311,6 @@ with tab2:
             left_points = np.where(T2[:center_peak_idx] <= half_max)[0]
             right_points = np.where(T2[center_peak_idx:] <= half_max)[0]
             
-            # בדיקת בטיחות מפני אינדקסים ריקים (כשהפיק נחתך בקצה הסריקה)
             if len(left_points) > 0 and len(right_points) > 0:
                 idx_left = left_points[-1]
                 idx_right = center_peak_idx + right_points[0]
@@ -300,22 +321,44 @@ with tab2:
         mc4.markdown(f'<div class="metric-card"><div class="metric-label">{T["calc_q"]}</div><div class="metric-val">{Q_val:,.0f}</div></div>', unsafe_allow_html=True)
         mc5.markdown(f'<div class="metric-card"><div class="metric-label">{T["calc_fwhm"]}</div><div class="metric-val">{fwhm_nm:.3f} nm</div></div>', unsafe_allow_html=True)
 
-        fig2, ax2 = plt.subplots(figsize=(9, 4.5), dpi=150)
-        fig2.patch.set_facecolor('#0F172A')
-        ax2.set_facecolor('#0F172A')
+        # --- 1. גרף בסקאלה ליניארית (הבלטת פיק התמסורת והשקע בהחזרה) ---
+        st.markdown(f"#### {T['graph_linear_title']}")
+        fig2_lin, ax2_lin = plt.subplots(figsize=(9, 3.8), dpi=150)
+        fig2_lin.patch.set_facecolor('#0F172A')
+        ax2_lin.set_facecolor('#0F172A')
         
-        ax2.plot(wls_2, T2, color='#10B981', linewidth=2.5, label='Transmission (T)')
-        ax2.plot(wls_2, R2, color='#64748B', linewidth=1.5, alpha=0.6, label='Reflectivity (R)')
+        ax2_lin.plot(wls_2, T2, color='#10B981', linewidth=2, label='Transmission (T)')
+        ax2_lin.plot(wls_2, R2, color='#38BDF8', linewidth=1.5, linestyle='--', alpha=0.7, label='Reflectivity (R)')
+        ax2_lin.set_ylim(-0.02, 1.05)
+        ax2_lin.set_xlabel("Wavelength λ (nm)", color='#94A3B8', fontweight='bold')
+        ax2_lin.set_ylabel("Linear Value (0-1)", color='#94A3B8', fontweight='bold')
+        ax2_lin.grid(True, color='#334155', linestyle=':', alpha=0.6)
+        ax2_lin.legend(facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC')
         
-        ax2.set_yscale('log')
-        ax2.set_ylim(1e-4, 1.5)
-        ax2.set_xlabel("Wavelength λ (nm)", color='#94A3B8', fontweight='bold')
-        ax2.set_ylabel("Transmission (Log Scale)", color='#94A3B8', fontweight='bold')
-        ax2.grid(True, color='#334155', linestyle=':', alpha=0.6)
-        ax2.legend(facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC')
+        st.pyplot(fig2_lin)
+        st.download_button(T["download_lin"], data=figure_to_bytes(fig2_lin), file_name="defect_linear.png", mime="image/png", key="dl_lin_2")
+
+        st.write("")
+
+        # --- 2. גרף בסקאלה לוגריתמית / dB (הבלטת עומק ה-Notch בצורה דרמטית) ---
+        st.markdown(f"#### {T['graph_log_title']}")
+        fig2_log, ax2_log = plt.subplots(figsize=(9, 3.8), dpi=150)
+        fig2_log.patch.set_facecolor('#0F172A')
+        ax2_log.set_facecolor('#0F172A')
         
-        st.pyplot(fig2)
-        st.download_button(T["download"], data=figure_to_bytes(fig2), file_name="defect_cavity_spectrum.png", mime="image/png")
+        R2_db = 10 * np.log10(np.maximum(1e-6, R2))
+        T2_db = 10 * np.log10(np.maximum(1e-6, T2))
+        
+        ax2_log.plot(wls_2, T2_db, color='#10B981', linewidth=2, label='Transmission (dB)')
+        ax2_log.plot(wls_2, R2_db, color='#38BDF8', linewidth=1.5, linestyle='--', alpha=0.7, label='Reflectivity Notch (dB)')
+        ax2_log.set_ylim(-60, 2)
+        ax2_log.set_xlabel("Wavelength λ (nm)", color='#94A3B8', fontweight='bold')
+        ax2_log.set_ylabel("Power (dB)", color='#94A3B8', fontweight='bold')
+        ax2_log.grid(True, color='#334155', linestyle=':', alpha=0.6)
+        ax2_log.legend(facecolor='#1E293B', edgecolor='#334155', labelcolor='#F8FAFC')
+        
+        st.pyplot(fig2_log)
+        st.download_button(T["download_log"], data=figure_to_bytes(fig2_log), file_name="defect_log_db.png", mime="image/png", key="dl_log_2")
 
 # ==========================================
 # TAB 3: Physics & Equations
